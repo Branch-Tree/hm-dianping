@@ -12,6 +12,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.concurrent.TimeUnit;
 
 /**
  * <p>
@@ -43,17 +44,41 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             Shop shop = JSONUtil.toBean(shopJson, Shop.class);
             return Result.ok(shop);
         }
+
+        if(shopJson!=null){
+            return Result.fail("店铺不存在");
+        }
+
         //不存在，查询数据库
         Shop shop=getById(id);
         //数据库不存在，返回错误
         if(shop==null){
+            stringRedisTemplate.opsForValue().set(key,"", RedisConstants.CACHE_NULL_TTL,TimeUnit.MINUTES);
             return Result.fail("店铺不存在");
         }
 
         //存在，写入redis
 
-        stringRedisTemplate.opsForValue().set(key,JSONUtil.toJsonStr(shop));
+        stringRedisTemplate.opsForValue().set(key,JSONUtil.toJsonStr(shop),RedisConstants.CACHE_SHOP_TTL, TimeUnit.MINUTES);
         //返回
         return Result.ok(shop);
+    }
+
+    /**
+     * 更新店铺数据
+     * @param shop
+     * @return
+     */
+    @Override
+    public Result update(Shop shop) {
+        Long id=shop.getId();
+        if(id==null){
+            return Result.fail("店铺id不能为空");
+        }
+        //更新数据库
+        updateById(shop);
+        //删除缓存
+        stringRedisTemplate.delete(RedisConstants.CACHE_SHOP_KEY+id);
+        return Result.ok();
     }
 }
